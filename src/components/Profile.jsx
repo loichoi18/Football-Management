@@ -1,68 +1,46 @@
 import React, { useState, useEffect } from 'react'
 import { auth, db } from '../firebase'
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from 'firebase/auth'
+import { signOut, updateProfile } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { useAuth } from '../App'
-
-const POSITIONS = ['GK', 'DF', 'MF', 'ATK']
-const TIERS = ['S+', 'S', 'A', 'B', 'F']
-const TIER_COLORS = { 'S+': '#ff4081', 'S': '#ffd740', 'A': '#00e676', 'B': '#42a5f5', 'F': '#90a4ae' }
-
-function getInitialColor(name) {
-  const colors = ['#e91e63','#9c27b0','#673ab7','#3f51b5','#2196f3','#009688','#4caf50','#ff9800','#ff5722','#795548']
-  let hash = 0
-  for (let i = 0; i < (name || '').length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  return colors[Math.abs(hash) % colors.length]
-}
+import { ALL_POSITIONS, POS_COLORS, POS_GROUPS, POS_GROUP_ORDER, TIERS, TIER_COLORS, getInitialColor } from '../constants'
 
 export default function Profile() {
   const { user } = useAuth()
-  const [isRegister, setIsRegister] = useState(false)
-  const [authForm, setAuthForm] = useState({ email: '', password: '', name: '' })
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
   const [editing, setEditing] = useState(false)
   const [profileData, setProfileData] = useState({
-    fullName: '', dob: '', major: '', number: '', position: '',
+    fullName: '', dob: '', major: '', number: '',
+    positions: [], priority: '',
     wantTeamWith: '', favoriteField: '', tier: 'A'
   })
+  const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // Load profile data when user logs in
   useEffect(() => {
     if (!user) return
-    const loadProfile = async () => {
+    const load = async () => {
       try {
         const snap = await getDoc(doc(db, 'profiles', user.uid))
         if (snap.exists()) {
-          setProfileData({ ...profileData, ...snap.data() })
+          setProfileData(prev => ({ ...prev, ...snap.data() }))
         } else {
           setProfileData(prev => ({ ...prev, fullName: user.displayName || '' }))
         }
-      } catch (err) {
-        console.error('Load profile error:', err)
-      }
+      } catch (err) { console.error(err) }
     }
-    loadProfile()
+    load()
   }, [user])
 
-  const handleAuth = async () => {
-    setError('')
-    setLoading(true)
-    try {
-      if (isRegister) {
-        if (!authForm.name.trim()) { setError('Name is required'); setLoading(false); return }
-        const cred = await createUserWithEmailAndPassword(auth, authForm.email, authForm.password)
-        await updateProfile(cred.user, { displayName: authForm.name.trim() })
-      } else {
-        await signInWithEmailAndPassword(auth, authForm.email, authForm.password)
-      }
-      setAuthForm({ email: '', password: '', name: '' })
-    } catch (err) {
-      const msg = err.code?.replace('auth/', '').replace(/-/g, ' ') || 'Something went wrong'
-      setError(msg.charAt(0).toUpperCase() + msg.slice(1))
+  const togglePosition = (pos) => {
+    const { positions, priority } = profileData
+    if (positions.includes(pos)) {
+      const newPos = positions.filter(p => p !== pos)
+      setProfileData({ ...profileData, positions: newPos, priority: priority === pos ? (newPos[0] || '') : priority })
+    } else {
+      if (positions.length >= 3) return
+      const newPos = [...positions, pos]
+      setProfileData({ ...profileData, positions: newPos, priority: priority || pos })
     }
-    setLoading(false)
   }
 
   const saveProfile = async () => {
@@ -73,75 +51,46 @@ export default function Profile() {
         await updateProfile(auth.currentUser, { displayName: profileData.fullName })
       }
       setEditing(false)
-    } catch (err) {
-      setError('Failed to save: ' + err.message)
-    }
+    } catch (err) { setError('Failed to save: ' + err.message) }
     setSaving(false)
   }
 
-  // ── Not logged in ──
-  if (!user) {
-    return (
-      <div className="auth-container">
-        <h1>NATIONS FC</h1>
-        <p>Manage your football team</p>
-        <div className="auth-form">
-          {error && <div className="error-msg">{error}</div>}
-          {isRegister && (
-            <div className="input-group"><label>Display Name</label>
-              <input className="input" placeholder="Your name" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} />
-            </div>
-          )}
-          <div className="input-group"><label>Email</label>
-            <input className="input" type="email" placeholder="you@email.com" value={authForm.email} onChange={e => setAuthForm({...authForm, email: e.target.value})} />
-          </div>
-          <div className="input-group"><label>Password</label>
-            <input className="input" type="password" placeholder="••••••••" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} onKeyDown={e => e.key === 'Enter' && handleAuth()} />
-          </div>
-          <button className="btn btn-primary btn-full" onClick={handleAuth} disabled={loading}>
-            {loading ? 'Loading...' : isRegister ? 'Create Account' : 'Sign In'}
-          </button>
-          <div className="auth-toggle">
-            {isRegister ? 'Already have an account? ' : "Don't have an account? "}
-            <button onClick={() => { setIsRegister(!isRegister); setError('') }}>
-              {isRegister ? 'Sign In' : 'Register'}
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // ── Logged in ──
-  const displayName = user.displayName || user.email?.split('@')[0] || 'Player'
+  if (!user) return null
+  const displayName = profileData.fullName || user.displayName || user.email?.split('@')[0] || 'Player'
 
   return (
     <div>
-      {/* Header card */}
       <div className="card">
         <div className="profile-header">
           <div className="avatar profile-avatar" style={{ background: getInitialColor(displayName) }}>
             {displayName.charAt(0).toUpperCase()}
           </div>
-          <div className="profile-name">{profileData.fullName || displayName}</div>
+          <div className="profile-name">{displayName}</div>
           <div className="profile-email">{user.email}</div>
-          {profileData.tier && (
-            <span className="badge" style={{ background: TIER_COLORS[profileData.tier] + '25', color: TIER_COLORS[profileData.tier], fontSize: 14, padding: '4px 16px' }}>
-              Tier {profileData.tier}
-            </span>
-          )}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', marginTop: 4 }}>
+            {(profileData.positions || []).map(p => (
+              <span key={p} style={{
+                padding: '2px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700,
+                background: POS_COLORS[p] + '20', color: POS_COLORS[p],
+                border: p === profileData.priority ? `1.5px solid ${POS_COLORS[p]}` : '1.5px solid transparent'
+              }}>
+                {p === profileData.priority && '⭐'}{p}
+              </span>
+            ))}
+            {profileData.tier && (
+              <span style={{ padding: '2px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, background: TIER_COLORS[profileData.tier] + '25', color: TIER_COLORS[profileData.tier] }}>
+                Tier {profileData.tier}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Profile info card */}
       <div className="card">
         <div className="flex-between mb-12">
           <div className="section-sub" style={{ marginBottom: 0 }}>Profile Info</div>
-          <button className="btn btn-outline btn-small" onClick={() => setEditing(!editing)}>
-            {editing ? 'Cancel' : 'Edit'}
-          </button>
+          <button className="btn btn-outline btn-small" onClick={() => setEditing(!editing)}>{editing ? 'Cancel' : 'Edit'}</button>
         </div>
-
         {error && <div className="error-msg">{error}</div>}
 
         {editing ? (
@@ -160,12 +109,38 @@ export default function Profile() {
             <div className="input-group"><label>Major / Occupation</label>
               <input className="input" placeholder="e.g. Computer Science" value={profileData.major} onChange={e => setProfileData({...profileData, major: e.target.value})} />
             </div>
-            <div className="input-group"><label>Position</label>
-              <select className="input" value={profileData.position} onChange={e => setProfileData({...profileData, position: e.target.value})}>
-                <option value="">Select</option>
-                {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+
+            {/* Position picker */}
+            <div className="input-group">
+              <label>Positions (up to 3, tap selected to set priority ⭐)</label>
+              {POS_GROUP_ORDER.map(group => (
+                <div key={group} style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', letterSpacing: 1, marginBottom: 4 }}>{POS_GROUPS[group].label}</div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {POS_GROUPS[group].positions.map(pos => {
+                      const selected = (profileData.positions || []).includes(pos)
+                      const isPriority = profileData.priority === pos
+                      return (
+                        <button key={pos}
+                          onClick={() => selected ? setProfileData({...profileData, priority: pos}) : togglePosition(pos)}
+                          onDoubleClick={() => { if (selected) togglePosition(pos) }}
+                          style={{
+                            flex: 1, padding: '10px 0', borderRadius: 10, position: 'relative',
+                            border: `2px solid ${selected ? POS_COLORS[pos] : 'var(--border)'}`,
+                            background: selected ? POS_COLORS[pos] + '20' : 'var(--bg)',
+                            color: selected ? POS_COLORS[pos] : 'var(--text2)',
+                            fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font-body)'
+                          }}>
+                          {isPriority && <span style={{ position: 'absolute', top: -6, right: -4, fontSize: 12 }}>⭐</span>}
+                          {pos}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
+
             <div className="input-group"><label>Want to be in team with</label>
               <input className="input" placeholder="e.g. Khoa, Joey" value={profileData.wantTeamWith} onChange={e => setProfileData({...profileData, wantTeamWith: e.target.value})} />
             </div>
@@ -177,8 +152,8 @@ export default function Profile() {
                 {TIERS.map(t => (
                   <button key={t} onClick={() => setProfileData({...profileData, tier: t})}
                     style={{
-                      flex: 1, padding: '10px 0', borderRadius: 10, border: '2px solid',
-                      borderColor: profileData.tier === t ? TIER_COLORS[t] : 'var(--border)',
+                      flex: 1, padding: '10px 0', borderRadius: 10,
+                      border: `2px solid ${profileData.tier === t ? TIER_COLORS[t] : 'var(--border)'}`,
                       background: profileData.tier === t ? TIER_COLORS[t] + '20' : 'var(--bg)',
                       color: profileData.tier === t ? TIER_COLORS[t] : 'var(--text2)',
                       fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'var(--font-body)'
@@ -199,23 +174,20 @@ export default function Profile() {
               ['Date of Birth', profileData.dob],
               ['Major', profileData.major],
               ['Number', profileData.number ? `#${profileData.number}` : ''],
-              ['Position', profileData.position],
+              ['Positions', (profileData.positions || []).map(p => p === profileData.priority ? `⭐${p}` : p).join(', ')],
               ['Team With', profileData.wantTeamWith],
               ['Favorite Field', profileData.favoriteField],
               ['Tier', profileData.tier],
             ].map(([label, value]) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
                 <span style={{ color: 'var(--text2)' }}>{label}</span>
-                <span style={{ fontWeight: 600, color: label === 'Tier' && value ? TIER_COLORS[value] : 'var(--text)' }}>
-                  {value || '—'}
-                </span>
+                <span style={{ fontWeight: 600, color: label === 'Tier' && value ? TIER_COLORS[value] : 'var(--text)' }}>{value || '—'}</span>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Sign out */}
       <div className="card">
         <button className="btn btn-danger btn-full" onClick={() => signOut(auth)}>Sign Out</button>
       </div>

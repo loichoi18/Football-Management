@@ -5,6 +5,7 @@ import Events from './components/Events'
 import Members from './components/Members'
 import Profile from './components/Profile'
 import RandomTeam from './components/RandomTeam'
+import AuthScreen from './components/AuthScreen'
 import './styles.css'
 
 export const AuthContext = createContext(null)
@@ -32,11 +33,20 @@ export default function App() {
 
   if (loading) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'var(--bg)' }}>
-      <div style={{ fontFamily:'var(--font-display)', fontSize:32, color:'var(--accent)', letterSpacing:2 }}>
-        NATIONS FC
-      </div>
+      <div style={{ fontFamily:'var(--font-display)', fontSize:32, color:'var(--accent)', letterSpacing:2 }}>NATIONS FC</div>
     </div>
   )
+
+  // Show auth screen if not logged in
+  if (!user) {
+    return (
+      <AuthContext.Provider value={{ user }}>
+        <div className="tab-content">
+          <AuthScreen />
+        </div>
+      </AuthContext.Provider>
+    )
+  }
 
   return (
     <AuthContext.Provider value={{ user }}>
@@ -46,7 +56,6 @@ export default function App() {
         {tab === 'random' && <RandomTeam />}
         {tab === 'profile' && <Profile />}
       </div>
-
       <nav className="bottom-nav">
         {['events', 'members', 'random', 'profile'].map(t => (
           <button key={t} className={`nav-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
