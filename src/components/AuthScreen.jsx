@@ -74,7 +74,7 @@ export default function AuthScreen() {
 
   return (
     <div className="auth-container">
-      <h1>NATIONS FC</h1>
+      <h1>UTS Bluelock</h1>
       <p>Manage your football team</p>
 
       <div className="auth-form">
