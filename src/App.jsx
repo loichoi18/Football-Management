@@ -33,7 +33,7 @@ export default function App() {
 
   if (loading) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'var(--bg)' }}>
-      <div style={{ fontFamily:'var(--font-display)', fontSize:32, color:'var(--accent)', letterSpacing:2 }}>NATIONS FC</div>
+      <div style={{ fontFamily:'var(--font-display)', fontSize:32, color:'var(--accent)', letterSpacing:2 }}>UTS Bluelock</div>
     </div>
   )
 
